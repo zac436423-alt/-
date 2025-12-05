@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>在线装柜计算器</title>
+    <title>多尺寸货物装柜计算器</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -11,7 +11,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 600px;
+            max-width: 800px;
             margin: 0 auto;
             background: #fff;
             padding: 25px;
@@ -25,27 +25,36 @@
             padding-bottom: 10px;
             margin-bottom: 20px;
         }
-        .input-group {
+        .cargo-list-header {
             display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
+            font-weight: bold;
+            padding: 10px 0;
+            border-bottom: 1px solid #ddd;
+            background-color: #f9f9f9;
+        }
+        .cargo-list-header > div, .cargo-item > div {
+            flex: 1;
+            text-align: center;
+        }
+        .cargo-item {
+            display: flex;
+            gap: 5px;
+            padding: 10px 0;
+            border-bottom: 1px dashed #eee;
             align-items: center;
         }
-        .input-group label {
-            min-width: 60px;
-            font-weight: bold;
-            color: #555;
-        }
-        .input-group input[type="number"] {
-            flex-grow: 1;
-            padding: 10px;
+        .cargo-item input[type="number"] {
+            width: 90%;
+            padding: 8px;
             border: 1px solid #ccc;
             border-radius: 4px;
+            text-align: center;
         }
-        button {
+        #add-cargo-btn, #calculate-btn {
             width: 100%;
             padding: 12px;
-            background-color: #007bff;
+            margin-top: 15px;
+            background-color: #28a745;
             color: white;
             border: none;
             border-radius: 4px;
@@ -53,9 +62,22 @@
             cursor: pointer;
             transition: background-color 0.3s;
         }
-        button:hover {
-            background-color: #0056b3;
+        #calculate-btn {
+            background-color: #007bff;
         }
+        #calculate-btn:hover { background-color: #0056b3; }
+        #add-cargo-btn:hover { background-color: #1e7e34; }
+        .remove-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            padding: 5px 10px;
+            font-size: 14px;
+            width: 100%;
+        }
+        .remove-btn:hover { background-color: #c82333; }
         .results {
             margin-top: 30px;
             padding: 15px;
@@ -69,136 +91,214 @@
             margin-bottom: 10px;
         }
         .result-item {
-            margin-bottom: 10px;
-            padding: 8px;
+            margin-bottom: 15px;
+            padding: 10px;
             background-color: #fff;
             border-radius: 4px;
             border-left: 5px solid #28a745;
         }
-        .unit-label {
+        .result-container-header {
+            font-weight: bold;
+            background-color: #f0f8ff;
+            padding: 5px;
+            border-radius: 3px;
+            margin-bottom: 8px;
+        }
+        .result-cargo-detail {
+            margin-left: 15px;
             font-size: 0.9em;
-            color: #6c757d;
-            margin-left: 5px;
+            line-height: 1.5;
+        }
+        .cargo-id-col {
+            flex: 0.3 !important;
+        }
+        .action-col {
+            flex: 0.5 !important;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📦 在线装柜计算器 (LCL)</h2>
+    <h2>📦 多尺寸货物装柜计算器</h2>
 
-    <h3>货物尺寸 (单位: cm)</h3>
-    <div class="input-group">
-        <label for="length">长 (L):</label>
-        <input type="number" id="length" value="100" min="1" required> <span class="unit-label">cm</span>
+    <h3>多种货物尺寸输入 (单位: cm)</h3>
+    <div class="cargo-list-header">
+        <div class="cargo-id-col">序号</div>
+        <div>长 (L)</div>
+        <div>宽 (W)</div>
+        <div>高 (H)</div>
+        <div class="action-col">操作</div>
     </div>
-    <div class="input-group">
-        <label for="width">宽 (W):</label>
-        <input type="number" id="width" value="80" min="1" required> <span class="unit-label">cm</span>
+    
+    <div id="cargo-input-area">
+        <div class="cargo-item" data-id="1">
+            <div class="cargo-id-col">#1</div>
+            <div><input type="number" name="L" value="100" min="1" required></div>
+            <div><input type="number" name="W" value="80" min="1" required></div>
+            <div><input type="number" name="H" value="60" min="1" required></div>
+            <div class="action-col"><button class="remove-btn" onclick="removeCargo(this)">删除</button></div>
+        </div>
     </div>
-    <div class="input-group">
-        <label for="height">高 (H):</label>
-        <input type="number" id="height" value="60" min="1" required> <span class="unit-label">cm</span>
-    </div>
+    
+    <button id="add-cargo-btn" onclick="addCargo()">+ 添加一行货物尺寸</button>
 
-    <button onclick="calculateLoading()">计算装载量</button>
+    <button id="calculate-btn" onclick="calculateAllLoading()">计算全部装载量</button>
 
     <div class="results" id="results">
         <h3>计算结果</h3>
-        <p>输入货物尺寸后点击上方按钮进行计算。</p>
+        <p>输入多种货物尺寸后点击上方按钮进行计算。</p>
     </div>
 </div>
 
 <script>
     // --- 核心数据：集装箱内部可用尺寸 (以 cm 为单位) ---
-    // 实际装载中，尺寸可能略有浮动，这里采用国际常用标准尺寸
     const CONTAINER_SPECS = {
         '20GP': { name: '20尺普通柜 (20\'GP)', L: 589.8, W: 235.2, H: 238.5 },
         '40GP': { name: '40尺普通柜 (40\'GP)', L: 1203.2, W: 235.2, H: 238.5 },
         '40HQ': { name: '40尺高柜 (40\'HQ)', L: 1203.2, W: 235.2, H: 269.0 }
     };
+    let cargoCount = 1;
+
+    /**
+     * 辅助函数：添加一行货物尺寸输入
+     */
+    function addCargo() {
+        cargoCount++;
+        const inputArea = document.getElementById('cargo-input-area');
+        const newItem = document.createElement('div');
+        newItem.className = 'cargo-item';
+        newItem.setAttribute('data-id', cargoCount);
+        newItem.innerHTML = `
+            <div class="cargo-id-col">#${cargoCount}</div>
+            <div><input type="number" name="L" value="100" min="1" required></div>
+            <div><input type="number" name="W" value="80" min="1" required></div>
+            <div><input type="number" name="H" value="60" min="1" required></div>
+            <div class="action-col"><button class="remove-btn" onclick="removeCargo(this)">删除</button></div>
+        `;
+        inputArea.appendChild(newItem);
+    }
+
+    /**
+     * 辅助函数：删除一行货物尺寸输入
+     */
+    function removeCargo(button) {
+        const itemToRemove = button.closest('.cargo-item');
+        itemToRemove.remove();
+        // 重新更新序号显示
+        updateCargoNumbers();
+    }
+    
+    /**
+     * 辅助函数：更新货物序号显示
+     */
+    function updateCargoNumbers() {
+        const items = document.querySelectorAll('.cargo-item');
+        items.forEach((item, index) => {
+            item.querySelector('.cargo-id-col').textContent = `#${index + 1}`;
+            item.setAttribute('data-id', index + 1);
+        });
+        cargoCount = items.length > 0 ? items.length : 0;
+    }
+
 
     /**
      * 计算特定摆放下能装载的件数
-     * @param {number} Lc 货柜长 (Container Length)
-     * @param {number} Wc 货柜宽 (Container Width)
-     * @param {number} Hc 货柜高 (Container Height)
-     * @param {number} Li 货物长 (Item Length)
-     * @param {number} Wi 货物宽 (Item Width)
-     * @param {number} Hi 货物高 (Item Height)
-     * @returns {number} 装载件数
      */
     function getPieces(Lc, Wc, Hc, Li, Wi, Hi) {
         if (Li <= 0 || Wi <= 0 || Hi <= 0) return 0;
         
-        // 沿三个轴向的数量
         const N_L = Math.floor(Lc / Li);
         const N_W = Math.floor(Wc / Wi);
         const N_H = Math.floor(Hc / Hi);
 
-        // 总件数
         return N_L * N_W * N_H;
     }
 
     /**
-     * 执行装柜计算
+     * 计算**单种**货物在**所有**货柜中的最大装载量
      */
-    function calculateLoading() {
-        const itemL = parseFloat(document.getElementById('length').value);
-        const itemW = parseFloat(document.getElementById('width').value);
-        const itemH = parseFloat(document.getElementById('height').value);
-        const resultsDiv = document.getElementById('results');
+    function calculateSingleItemLoading(itemL, itemW, itemH, containerKey) {
+        const container = CONTAINER_SPECS[containerKey];
+        const Lc = container.L;
+        const Wc = container.W;
+        const Hc = container.H;
 
-        if (isNaN(itemL) || isNaN(itemW) || isNaN(itemH) || itemL <= 0 || itemW <= 0 || itemH <= 0) {
-            resultsDiv.innerHTML = '<h3>计算结果</h3><p style="color: red;">请输入有效的货物长、宽、高。</p>';
+        // 6种轴对齐摆放方式 (LxWxH, LxHxW, WxLxH, WxHxL, HxLxW, HxWxL)
+        const orientations = [
+            { pieces: getPieces(Lc, Wc, Hc, itemL, itemW, itemH), name: `${itemL}×${itemW}×${itemH}` },
+            { pieces: getPieces(Lc, Wc, Hc, itemL, itemH, itemW), name: `${itemL}×${itemH}×${itemW}` },
+            { pieces: getPieces(Lc, Wc, Hc, itemW, itemL, itemH), name: `${itemW}×${itemL}×${itemH}` },
+            { pieces: getPieces(Lc, Wc, Hc, itemW, itemH, itemL), name: `${itemW}×${itemH}×${itemL}` },
+            { pieces: getPieces(Lc, Wc, Hc, itemH, itemL, itemW), name: `${itemH}×${itemL}×${itemW}` },
+            { pieces: getPieces(Lc, Wc, Hc, itemH, itemW, itemL), name: `${itemH}×${itemW}×${itemL}` }
+        ];
+
+        let maxPieces = 0;
+        let bestOrientation = '';
+
+        orientations.forEach(orientation => {
+            if (orientation.pieces > maxPieces) {
+                maxPieces = orientation.pieces;
+                bestOrientation = orientation.name;
+            }
+        });
+
+        return { maxPieces, bestOrientation };
+    }
+
+    /**
+     * 主函数：遍历所有输入，并计算所有货柜的装载量
+     */
+    function calculateAllLoading() {
+        const cargoItems = document.querySelectorAll('.cargo-item');
+        const resultsDiv = document.getElementById('results');
+        const cargoInputs = [];
+
+        // 1. 收集和验证所有货物输入
+        cargoItems.forEach(item => {
+            const L = parseFloat(item.querySelector('input[name="L"]').value);
+            const W = parseFloat(item.querySelector('input[name="W"]').value);
+            const H = parseFloat(item.querySelector('input[name="H"]').value);
+            const id = item.getAttribute('data-id');
+
+            if (isNaN(L) || isNaN(W) || isNaN(H) || L <= 0 || W <= 0 || H <= 0) {
+                resultsDiv.innerHTML = `<h3>计算结果</h3><p style="color: red;">请检查 #${id} 货物，输入有效的长、宽、高。</p>`;
+                return; // 跳出当前循环，但不终止函数
+            }
+
+            cargoInputs.push({ L, W, H, id });
+        });
+
+        if (cargoInputs.length === 0) {
+            resultsDiv.innerHTML = '<h3>计算结果</h3><p>请至少添加一行货物尺寸。</p>';
             return;
         }
 
-        let outputHTML = '<h3>计算结果</h3>';
+        let outputHTML = '<h3>计算结果 (轴对齐摆放的最大件数)</h3>';
 
-        // 遍历所有货柜类型进行计算
-        for (const key in CONTAINER_SPECS) {
-            const container = CONTAINER_SPECS[key];
-            const Lc = container.L;
-            const Wc = container.W;
-            const Hc = container.H;
+        // 2. 遍历所有货柜类型
+        for (const containerKey in CONTAINER_SPECS) {
+            const container = CONTAINER_SPECS[containerKey];
+            outputHTML += `<div class="result-item">`;
+            outputHTML += `<div class="result-container-header">🚢 ${container.name} (内部尺寸: ${container.L}x${container.W}x${container.H} cm)</div>`;
 
-            // 6种轴对齐摆放方式
-            const orientations = [
-                // 1. LWH
-                { pieces: getPieces(Lc, Wc, Hc, itemL, itemW, itemH), name: `L(${itemL}) $\\times$ W(${itemW}) $\\times$ H(${itemH})$` },
-                // 2. LHW
-                { pieces: getPieces(Lc, Wc, Hc, itemL, itemH, itemW), name: `L(${itemL}) $\\times$ W(${itemH}) $\\times$ H(${itemW})$` },
-                // 3. WLH
-                { pieces: getPieces(Lc, Wc, Hc, itemW, itemL, itemH), name: `L(${itemW}) $\\times$ W(${itemL}) $\\times$ H(${itemH})$` },
-                // 4. WHL
-                { pieces: getPieces(Lc, Wc, Hc, itemW, itemH, itemL), name: `L(${itemW}) $\\times$ W(${itemH}) $\\times$ H(${itemL})$` },
-                // 5. HLW
-                { pieces: getPieces(Lc, Wc, Hc, itemH, itemL, itemW), name: `L(${itemH}) $\\times$ W(${itemL}) $\\times$ H(${itemW})$` },
-                // 6. HWL
-                { pieces: getPieces(Lc, Wc, Hc, itemH, itemW, itemL), name: `L(${itemH}) $\\times$ W(${itemW}) $\\times$ H(${itemL})$` }
-            ];
+            // 3. 遍历所有货物尺寸，计算在该货柜中的装载量
+            cargoInputs.forEach(cargo => {
+                const { maxPieces, bestOrientation } = calculateSingleItemLoading(cargo.L, cargo.W, cargo.H, containerKey);
 
-            // 找出最大件数和对应的摆放方式
-            let maxPieces = 0;
-            let bestOrientation = '';
-
-            orientations.forEach(orientation => {
-                if (orientation.pieces > maxPieces) {
-                    maxPieces = orientation.pieces;
-                    bestOrientation = orientation.name;
-                }
+                outputHTML += `
+                    <div class="result-cargo-detail">
+                        <strong>货物 #${cargo.id} (${cargo.L}×${cargo.W}×${cargo.H} cm):</strong>
+                        可装载 
+                        <span style="font-size: 1.1em; color: #dc3545; font-weight: bold;">${maxPieces}</span> 件
+                        <br>
+                        <small>（最佳摆放：${bestOrientation} 对应货柜长×宽×高）</small>
+                    </div>
+                `;
             });
 
-            // 格式化输出
-            outputHTML += `
-                <div class="result-item">
-                    <strong>${container.name}:</strong> 
-                    <span style="font-size: 1.2em; color: #dc3545; font-weight: bold;">${maxPieces}</span> 件
-                    <br>
-                    <small>最佳摆放(箱长$\times$箱宽$\times$箱高): ${bestOrientation}</small>
-                </div>
-            `;
+            outputHTML += `</div>`; // 结束 result-item
         }
 
         resultsDiv.innerHTML = outputHTML;
