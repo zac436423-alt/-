@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>集装箱混装体积计算器</title>
+    <title>集装箱混装体积与占地面积计算器</title>
     <style>
         /* (CSS 样式与上一个版本相似，略有调整) */
         body { font-family: Arial, sans-serif; background-color: #f4f7f9; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+        .container { max-width: 950px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
         h2 { text-align: center; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
         .cargo-list-header { display: flex; font-weight: bold; padding: 10px 0; border-bottom: 1px solid #ddd; background-color: #f9f9f9; }
         .cargo-list-header > div, .cargo-item > div { flex: 1; text-align: center; }
@@ -27,23 +27,34 @@
         .volume-detail { font-size: 1.1em; line-height: 1.8; }
         .alert-success { color: green; font-weight: bold; }
         .alert-danger { color: red; font-weight: bold; }
-        .select-group { display: flex; align-items: center; margin-bottom: 20px; }
-        .select-group label { margin-right: 15px; font-weight: bold; }
-        #container-select { padding: 10px; border-radius: 4px; border: 1px solid #ccc; }
+        .control-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        .control-group label { margin-right: 15px; font-weight: bold; }
+        select { padding: 10px; border-radius: 4px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📦 集装箱混装体积与空间利用率计算器</h2>
+    <h2>📦 集装箱混装体积与占地面积计算器</h2>
 
-    <div class="select-group">
-        <label for="container-select">选择集装箱型号:</label>
-        <select id="container-select">
-            <option value="20GP">20尺普通柜 (20'GP)</option>
-            <option value="40GP" selected>40尺普通柜 (40'GP)</option>
-            <option value="40HQ">40尺高柜 (40'HQ)</option>
-        </select>
+    <div class="control-group">
+        <div>
+            <label for="container-select">选择集装箱型号:</label>
+            <select id="container-select">
+                <option value="20GP">20尺普通柜 (20'GP)</option>
+                <option value="40GP" selected>40尺普通柜 (40'GP)</option>
+                <option value="40HQ">40尺高柜 (40'HQ)</option>
+            </select>
+        </div>
+        <div>
+            <label for="area-basis">占地面积计算基准:</label>
+            <select id="area-basis">
+                <option value="LW">长 $\times$ 宽 (L×W)</option>
+                <option value="WH">宽 $\times$ 高 (W×H)</option>
+                <option value="LH">长 $\times$ 高 (L×H)</option>
+                <option value="MIN_AREA">最小占地面积</option>
+            </select>
+        </div>
     </div>
 
     <h3>货物列表 (尺寸单位: cm, 数量: 件)</h3>
@@ -77,20 +88,20 @@
     
     <button id="add-cargo-btn" onclick="addCargo()">+ 添加一行货物尺寸和件数</button>
 
-    <button id="calculate-btn" onclick="calculateMixedLoading()">计算混装体积利用率</button>
+    <button id="calculate-btn" onclick="calculateMixedLoading()">计算混装体积与占地面积</button>
 
     <div class="results" id="results">
         <h3>计算结果</h3>
-        <p>选择货柜并输入多行货物尺寸与件数后，点击上方按钮计算。</p>
+        <p>选择货柜和占地面积基准，并输入多行货物尺寸与件数后，点击上方按钮计算。</p>
     </div>
 </div>
 
 <script>
     // --- 核心数据：集装箱内部可用尺寸及体积 (以 cm 为单位) ---
     const CONTAINER_SPECS = {
-        '20GP': { name: '20尺普通柜', L: 589.8, W: 235.2, H: 238.5, V_m3: 33.1 },
-        '40GP': { name: '40尺普通柜', L: 1203.2, W: 235.2, H: 238.5, V_m3: 67.5 },
-        '40HQ': { name: '40尺高柜', L: 1203.2, W: 235.2, H: 269.0, V_m3: 76.2 }
+        '20GP': { name: '20尺普通柜', L: 589.8, W: 235.2, H: 238.5, V_m3: 33.1, Area_m2: 13.87 }, // Area_m2 = L*W/10000
+        '40GP': { name: '40尺普通柜', L: 1203.2, W: 235.2, H: 238.5, V_m3: 67.5, Area_m2: 28.30 },
+        '40HQ': { name: '40尺高柜', L: 1203.2, W: 235.2, H: 269.0, V_m3: 76.2, Area_m2: 28.30 }
     };
     let cargoCount = 2; // 初始货物计数
 
@@ -140,21 +151,53 @@
         cargoCount = items.length;
     }
 
+    /**
+     * 计算单件货物的占地面积 (单位: m²)
+     * @param {number} L, W, H 货物尺寸 (cm)
+     * @param {string} basis 面积计算基准 (LW, WH, LH, MIN_AREA)
+     * @returns {number} 单件占地面积 (m²)
+     */
+    function calculateSingleItemArea(L, W, H, basis) {
+        let area_cm2 = 0;
+        
+        switch (basis) {
+            case 'LW':
+                area_cm2 = L * W;
+                break;
+            case 'WH':
+                area_cm2 = W * H;
+                break;
+            case 'LH':
+                area_cm2 = L * H;
+                break;
+            case 'MIN_AREA':
+                // 找出三个面中面积最小的作为占地面积
+                const areas = [L * W, W * H, L * H];
+                area_cm2 = Math.min(...areas);
+                break;
+        }
+        
+        // 转换为 m² (除以 10000)
+        return area_cm2 / 10000;
+    }
+
 
     /**
-     * 主函数：计算混装体积利用率
+     * 主函数：计算混装体积利用率和总占地面积
      */
     function calculateMixedLoading() {
         const cargoItems = document.querySelectorAll('.cargo-item');
         const resultsDiv = document.getElementById('results');
         const containerKey = document.getElementById('container-select').value;
+        const areaBasis = document.getElementById('area-basis').value;
         const container = CONTAINER_SPECS[containerKey];
         
         let totalCargoVolume_cm3 = 0;
+        let totalCargoArea_m2 = 0; // 新增：总占地面积
         let totalCargoCount = 0;
         let valid = true;
 
-        // 1. 收集和验证所有货物输入并计算总体积
+        // 1. 收集和验证所有货物输入并计算总体积和总面积
         cargoItems.forEach(item => {
             const L = parseFloat(item.querySelector('input[name="L"]').value);
             const W = parseFloat(item.querySelector('input[name="W"]').value);
@@ -168,10 +211,14 @@
                 return;
             }
 
-            // 计算该批货的总体积 (单位: cm³)
+            // 计算体积
             const singleVolume_cm3 = L * W * H;
             totalCargoVolume_cm3 += singleVolume_cm3 * N;
             totalCargoCount += N;
+            
+            // 计算占地面积 (m²)
+            const singleArea_m2 = calculateSingleItemArea(L, W, H, areaBasis);
+            totalCargoArea_m2 += singleArea_m2 * N;
         });
 
         if (!valid) return;
@@ -180,37 +227,54 @@
              return;
         }
 
-        // 2. 货柜体积数据 (转换单位: m³ -> cm³)
-        // 货柜理论内部体积 (V_C) = Lc * Wc * Hc (cm³)
+        // 2. 货柜体积和面积数据
         const containerVolume_cm3 = container.L * container.W * container.H;
-        // 货柜体积 (m³)，用于显示和对比
         const containerVolume_m3 = containerVolume_cm3 / 1000000; 
+        const containerArea_m2 = container.Area_m2; // 货柜底面积
 
-        // 3. 计算体积利用率
-        const utilizationRate = (totalCargoVolume_cm3 / containerVolume_cm3) * 100;
-
-        let outputHTML = '<h3>体积估算结果</h3>';
+        // 3. 计算利用率
+        const volumeUtilizationRate = (totalCargoVolume_cm3 / containerVolume_cm3) * 100;
+        // 占地面积利用率（假设货物可以完美紧密堆叠一层）
+        const areaUtilizationRate = (totalCargoArea_m2 / containerArea_m2) * 100;
+        
+        let outputHTML = '<h3>体积与占地面积估算结果</h3>';
         
         // 结果区域
         outputHTML += `
             <div class="result-container-header">
                 🚢 ${container.name} 
-                （理论容积: ${containerVolume_m3.toFixed(3)} m³）
+                （理论容积: ${containerVolume_m3.toFixed(3)} m³ | 底部面积: ${containerArea_m2.toFixed(2)} m²）
             </div>
             <div class="volume-detail">
                 <p><strong>📦 待装货物总件数:</strong> ${totalCargoCount} 件</p>
-                <p><strong>📦 待装货物总体积:</strong> ${(totalCargoVolume_cm3 / 1000000).toFixed(3)} m³</p>
                 <hr>
-                <p><strong>✅ 体积利用率:</strong> ${utilizationRate.toFixed(2)} %</p>
+                
+                <h4>体积计算 (CBM)</h4>
+                <p><strong>总货物总体积 (CBM):</strong> ${(totalCargoVolume_cm3 / 1000000).toFixed(3)} m³</p>
+                <p><strong>体积利用率:</strong> ${volumeUtilizationRate.toFixed(2)} %</p>
         `;
 
-        // 4. 判断装载可行性
-        if (utilizationRate > 100) {
-            outputHTML += `<p class="alert-danger">⚠️ 警告：总体积 (${(totalCargoVolume_cm3 / 1000000).toFixed(3)} m³) 已超过货柜理论容积 (${containerVolume_m3.toFixed(3)} m³)，无法装入！</p>`;
-        } else if (utilizationRate > 85) {
-             outputHTML += `<p class="alert-success">👍 空间利用率高 (${utilizationRate.toFixed(2)}%)。理论体积足够，请注意实际摆放和堆叠问题。</p>`;
+        // 4. 体积判断
+        if (volumeUtilizationRate > 100) {
+            outputHTML += `<p class="alert-danger">⚠️ 警告：总体积超容 (${volumeUtilizationRate.toFixed(2)}%)，无法装入！</p>`;
+        } else if (volumeUtilizationRate > 85) {
+             outputHTML += `<p class="alert-success">👍 体积利用率高，理论上可装载。</p>`;
         } else {
-            outputHTML += `<p class="alert-success">👍 理论体积足够 (${utilizationRate.toFixed(2)}%)，您还有空间装载更多货物。</p>`;
+            outputHTML += `<p class="alert-success">👍 体积足够，尚有余量。</p>`;
+        }
+        
+        // 5. 占地面积判断
+        outputHTML += `<hr>
+                <h4>占地面积计算 (M²)</h4>
+                <p><strong>总货物占地面积 (M²):</strong> <span style="font-size: 1.1em; color: #dc3545;">${totalCargoArea_m2.toFixed(2)} m²</span> (按 ${areaBasis} 面计算)</p>
+                <p><strong>单层面积利用率:</strong> ${areaUtilizationRate.toFixed(2)} %</p>`;
+
+        if (areaUtilizationRate > 100) {
+            outputHTML += `<p class="alert-danger">⚠️ 警告：总占地面积 (${totalCargoArea_m2.toFixed(2)} m²) 已超过货柜底部面积，**货物需要堆叠多层**才能装入！</p>`;
+        } else if (areaUtilizationRate > 90) {
+            outputHTML += `<p class="alert-success">👍 单层面积利用率极高，需严密摆放，可能只需堆叠一层。</p>`;
+        } else {
+            outputHTML += `<p>单层面积足够，不需要或只需少量堆叠。</p>`;
         }
         
         outputHTML += `</div>`;
