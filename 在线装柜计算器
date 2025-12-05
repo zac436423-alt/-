@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线装柜计算器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f9;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .input-group label {
+            min-width: 60px;
+            font-weight: bold;
+            color: #555;
+        }
+        .input-group input[type="number"] {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .results {
+            margin-top: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #e9ecef;
+        }
+        .results h3 {
+            color: #007bff;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .result-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            background-color: #fff;
+            border-radius: 4px;
+            border-left: 5px solid #28a745;
+        }
+        .unit-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📦 在线装柜计算器 (LCL)</h2>
+
+    <h3>货物尺寸 (单位: cm)</h3>
+    <div class="input-group">
+        <label for="length">长 (L):</label>
+        <input type="number" id="length" value="100" min="1" required> <span class="unit-label">cm</span>
+    </div>
+    <div class="input-group">
+        <label for="width">宽 (W):</label>
+        <input type="number" id="width" value="80" min="1" required> <span class="unit-label">cm</span>
+    </div>
+    <div class="input-group">
+        <label for="height">高 (H):</label>
+        <input type="number" id="height" value="60" min="1" required> <span class="unit-label">cm</span>
+    </div>
+
+    <button onclick="calculateLoading()">计算装载量</button>
+
+    <div class="results" id="results">
+        <h3>计算结果</h3>
+        <p>输入货物尺寸后点击上方按钮进行计算。</p>
+    </div>
+</div>
+
+<script>
+    // --- 核心数据：集装箱内部可用尺寸 (以 cm 为单位) ---
+    // 实际装载中，尺寸可能略有浮动，这里采用国际常用标准尺寸
+    const CONTAINER_SPECS = {
+        '20GP': { name: '20尺普通柜 (20\'GP)', L: 589.8, W: 235.2, H: 238.5 },
+        '40GP': { name: '40尺普通柜 (40\'GP)', L: 1203.2, W: 235.2, H: 238.5 },
+        '40HQ': { name: '40尺高柜 (40\'HQ)', L: 1203.2, W: 235.2, H: 269.0 }
+    };
+
+    /**
+     * 计算特定摆放下能装载的件数
+     * @param {number} Lc 货柜长 (Container Length)
+     * @param {number} Wc 货柜宽 (Container Width)
+     * @param {number} Hc 货柜高 (Container Height)
+     * @param {number} Li 货物长 (Item Length)
+     * @param {number} Wi 货物宽 (Item Width)
+     * @param {number} Hi 货物高 (Item Height)
+     * @returns {number} 装载件数
+     */
+    function getPieces(Lc, Wc, Hc, Li, Wi, Hi) {
+        if (Li <= 0 || Wi <= 0 || Hi <= 0) return 0;
+        
+        // 沿三个轴向的数量
+        const N_L = Math.floor(Lc / Li);
+        const N_W = Math.floor(Wc / Wi);
+        const N_H = Math.floor(Hc / Hi);
+
+        // 总件数
+        return N_L * N_W * N_H;
+    }
+
+    /**
+     * 执行装柜计算
+     */
+    function calculateLoading() {
+        const itemL = parseFloat(document.getElementById('length').value);
+        const itemW = parseFloat(document.getElementById('width').value);
+        const itemH = parseFloat(document.getElementById('height').value);
+        const resultsDiv = document.getElementById('results');
+
+        if (isNaN(itemL) || isNaN(itemW) || isNaN(itemH) || itemL <= 0 || itemW <= 0 || itemH <= 0) {
+            resultsDiv.innerHTML = '<h3>计算结果</h3><p style="color: red;">请输入有效的货物长、宽、高。</p>';
+            return;
+        }
+
+        let outputHTML = '<h3>计算结果</h3>';
+
+        // 遍历所有货柜类型进行计算
+        for (const key in CONTAINER_SPECS) {
+            const container = CONTAINER_SPECS[key];
+            const Lc = container.L;
+            const Wc = container.W;
+            const Hc = container.H;
+
+            // 6种轴对齐摆放方式
+            const orientations = [
+                // 1. LWH
+                { pieces: getPieces(Lc, Wc, Hc, itemL, itemW, itemH), name: `L(${itemL}) $\\times$ W(${itemW}) $\\times$ H(${itemH})$` },
+                // 2. LHW
+                { pieces: getPieces(Lc, Wc, Hc, itemL, itemH, itemW), name: `L(${itemL}) $\\times$ W(${itemH}) $\\times$ H(${itemW})$` },
+                // 3. WLH
+                { pieces: getPieces(Lc, Wc, Hc, itemW, itemL, itemH), name: `L(${itemW}) $\\times$ W(${itemL}) $\\times$ H(${itemH})$` },
+                // 4. WHL
+                { pieces: getPieces(Lc, Wc, Hc, itemW, itemH, itemL), name: `L(${itemW}) $\\times$ W(${itemH}) $\\times$ H(${itemL})$` },
+                // 5. HLW
+                { pieces: getPieces(Lc, Wc, Hc, itemH, itemL, itemW), name: `L(${itemH}) $\\times$ W(${itemL}) $\\times$ H(${itemW})$` },
+                // 6. HWL
+                { pieces: getPieces(Lc, Wc, Hc, itemH, itemW, itemL), name: `L(${itemH}) $\\times$ W(${itemW}) $\\times$ H(${itemL})$` }
+            ];
+
+            // 找出最大件数和对应的摆放方式
+            let maxPieces = 0;
+            let bestOrientation = '';
+
+            orientations.forEach(orientation => {
+                if (orientation.pieces > maxPieces) {
+                    maxPieces = orientation.pieces;
+                    bestOrientation = orientation.name;
+                }
+            });
+
+            // 格式化输出
+            outputHTML += `
+                <div class="result-item">
+                    <strong>${container.name}:</strong> 
+                    <span style="font-size: 1.2em; color: #dc3545; font-weight: bold;">${maxPieces}</span> 件
+                    <br>
+                    <small>最佳摆放(箱长$\times$箱宽$\times$箱高): ${bestOrientation}</small>
+                </div>
+            `;
+        }
+
+        resultsDiv.innerHTML = outputHTML;
+    }
+</script>
+
+</body>
+</html>
