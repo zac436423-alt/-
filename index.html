@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>集装箱混装体积与占地面积计算器</title>
     <style>
-        /* (CSS 样式与上一个版本相似，略有调整) */
-        body { font-family: Arial, sans-serif; background-color: #f4f7f9; padding: 20px; }
+        body { font-family: Arial, sans-serif; background-color: #f4f7f9; padding: 20px; color: #333; }
         .container { max-width: 950px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
-        h2 { text-align: center; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
+        h2 { text-align: center; color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
+        h3 { color: #333; margin-top: 25px; margin-bottom: 15px; }
         .cargo-list-header { display: flex; font-weight: bold; padding: 10px 0; border-bottom: 1px solid #ddd; background-color: #f9f9f9; }
-        .cargo-list-header > div, .cargo-item > div { flex: 1; text-align: center; }
+        .cargo-list-header > div, .cargo-item > div { flex: 1; text-align: center; padding: 5px; }
         .cargo-item { display: flex; gap: 5px; padding: 10px 0; border-bottom: 1px dashed #eee; align-items: center; }
-        .cargo-item input[type="number"] { width: 90%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+        .cargo-item input[type="number"] { width: 90%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; text-align: center; box-sizing: border-box;}
         .cargo-item .col-qty { flex: 0.8; }
         .cargo-item .col-size { flex: 1.2; }
         #add-cargo-btn, #calculate-btn { width: 100%; padding: 12px; margin-top: 15px; background-color: #28a745; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background-color 0.3s; }
@@ -23,13 +23,38 @@
         .remove-btn:hover { background-color: #c82333; }
         .results { margin-top: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #e9ecef; }
         .results h3 { color: #007bff; margin-top: 0; margin-bottom: 10px; }
-        .result-container-header { font-weight: bold; background-color: #f0f8ff; padding: 10px; border-radius: 3px; margin-bottom: 8px; }
+        .result-container-header { font-weight: bold; background-color: #f0f8ff; padding: 10px; border-radius: 3px; margin-bottom: 8px; border: 1px solid #d0e8ff; }
         .volume-detail { font-size: 1.1em; line-height: 1.8; }
-        .alert-success { color: green; font-weight: bold; }
-        .alert-danger { color: red; font-weight: bold; }
-        .control-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
-        .control-group label { margin-right: 15px; font-weight: bold; }
-        select { padding: 10px; border-radius: 4px; border: 1px solid #ccc; }
+        .alert-success { color: #28a745; font-weight: bold; }
+        .alert-danger { color: #dc3545; font-weight: bold; }
+        .alert-warning { color: orange; font-weight: bold; }
+        .control-group { display: flex; flex-wrap: wrap; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; gap: 15px;}
+        .control-group > div { display: flex; align-items: center; }
+        .control-group label { margin-right: 10px; font-weight: bold; color: #555; }
+        select { padding: 10px; border-radius: 4px; border: 1px solid #ccc; min-width: 150px; }
+
+        #visualization-area {
+            margin-top: 40px;
+            padding: 20px;
+            border: 1px solid #cfe2ff;
+            border-radius: 8px;
+            background-color: #e0f0ff;
+            text-align: center;
+        }
+        #containerCanvas {
+            border: 2px solid #333;
+            background: linear-gradient(to bottom, #f0f0f0, #e0e0e0); /* Light gradient for depth */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            max-width: 100%;
+            height: auto; /* Maintain aspect ratio */
+            display: block; /* Remove extra space below canvas */
+            margin: 0 auto;
+        }
+        #visualization-area p {
+            margin-top: 15px;
+            color: #555;
+            font-size: 0.95em;
+        }
     </style>
 </head>
 <body>
@@ -49,9 +74,9 @@
         <div>
             <label for="area-basis">占地面积计算基准:</label>
             <select id="area-basis">
-                <option value="LW">长 $\times$ 宽 (L×W)</option>
-                <option value="WH">宽 $\times$ 高 (W×H)</option>
-                <option value="LH">长 $\times$ 高 (L×H)</option>
+                <option value="LW">长 × 宽 (L×W)</option>
+                <option value="WH">宽 × 高 (W×H)</option>
+                <option value="LH">长 × 高 (L×H)</option>
                 <option value="MIN_AREA">最小占地面积</option>
             </select>
         </div>
@@ -93,6 +118,12 @@
     <div class="results" id="results">
         <h3>计算结果</h3>
         <p>选择货柜和占地面积基准，并输入多行货物尺寸与件数后，点击上方按钮计算。</p>
+    </div>
+
+    <div id="visualization-area" style="margin-top: 40px; text-align: center; display: none;">
+        <h3>📦 装柜俯视图 (示意)</h3>
+        <canvas id="containerCanvas" style="border: 2px solid #333; background: #fff; max-width: 100%;"></canvas>
+        <p style="font-size: 0.9em; color: #666;">* 灰色边框为集装箱内径，彩色方块为货物。此图为简化2D俯视图，仅供大致摆放参考。</p>
     </div>
 </div>
 
@@ -181,9 +212,8 @@
         return area_cm2 / 10000;
     }
 
-
     /**
-     * 主函数：计算混装体积利用率和总占地面积
+     * 主函数：计算混装体积利用率和总占地面积，并绘制示意图
      */
     function calculateMixedLoading() {
         const cargoItems = document.querySelectorAll('.cargo-item');
@@ -196,6 +226,7 @@
         let totalCargoArea_m2 = 0; // 新增：总占地面积
         let totalCargoCount = 0;
         let valid = true;
+        const cargoDataForDraw = []; // 用于绘图的数据列表
 
         // 1. 收集和验证所有货物输入并计算总体积和总面积
         cargoItems.forEach(item => {
@@ -211,6 +242,13 @@
                 return;
             }
 
+            // 检查单件货物尺寸是否超出集装箱内部尺寸
+            if (L > container.L || W > container.W || H > container.H) {
+                resultsDiv.innerHTML = `<h3>计算结果</h3><p class="alert-danger">警告：#${id} 货物的长、宽或高尺寸 (${L}x${W}x${H} cm) 超出了当前所选集装箱 (${container.name}) 的内部尺寸 (${container.L.toFixed(1)}x${container.W.toFixed(1)}x${container.H.toFixed(1)} cm)。请检查您的输入。</p>`;
+                valid = false;
+                return;
+            }
+
             // 计算体积
             const singleVolume_cm3 = L * W * H;
             totalCargoVolume_cm3 += singleVolume_cm3 * N;
@@ -219,17 +257,24 @@
             // 计算占地面积 (m²)
             const singleArea_m2 = calculateSingleItemArea(L, W, H, areaBasis);
             totalCargoArea_m2 += singleArea_m2 * N;
+
+            // 为绘图收集数据 (这里假设俯视图只关心L和W，且为长宽尺寸，具体可根据basis调整)
+            cargoDataForDraw.push({ L: L, W: W, N: N, H: H, id: id });
         });
 
-        if (!valid) return;
+        if (!valid) {
+            document.getElementById('visualization-area').style.display = 'none'; // 隐藏绘图区域
+            return;
+        }
         if (totalCargoCount === 0) {
              resultsDiv.innerHTML = '<h3>计算结果</h3><p>请至少输入一种货物及其件数。</p>';
+             document.getElementById('visualization-area').style.display = 'none'; // 隐藏绘图区域
              return;
         }
 
         // 2. 货柜体积和面积数据
         const containerVolume_cm3 = container.L * container.W * container.H;
-        const containerVolume_m3 = containerVolume_cm3 / 1000000; 
+        const containerVolume_m3 = containerVolume_cm3 / 1000000;    
         const containerArea_m2 = container.Area_m2; // 货柜底面积
 
         // 3. 计算利用率
@@ -257,8 +302,10 @@
         // 4. 体积判断
         if (volumeUtilizationRate > 100) {
             outputHTML += `<p class="alert-danger">⚠️ 警告：总体积超容 (${volumeUtilizationRate.toFixed(2)}%)，无法装入！</p>`;
-        } else if (volumeUtilizationRate > 85) {
-             outputHTML += `<p class="alert-success">👍 体积利用率高，理论上可装载。</p>`;
+        } else if (volumeUtilizationRate > 95) { // 提高警惕线，实际装柜很难达到100%
+            outputHTML += `<p class="alert-warning">⚠️ 提醒：体积利用率极高 (${volumeUtilizationRate.toFixed(2)}%)。考虑到纸箱可能胀箱、摆放空隙或不同货物形状差异，实际装载可能遇到困难。</p>`;
+        } else if (volumeUtilizationRate > 80) {
+            outputHTML += `<p class="alert-success">👍 体积利用率较高，理论上可装载。</p>`;
         } else {
             outputHTML += `<p class="alert-success">👍 体积足够，尚有余量。</p>`;
         }
@@ -270,16 +317,140 @@
                 <p><strong>单层面积利用率:</strong> ${areaUtilizationRate.toFixed(2)} %</p>`;
 
         if (areaUtilizationRate > 100) {
-            outputHTML += `<p class="alert-danger">⚠️ 警告：总占地面积 (${totalCargoArea_m2.toFixed(2)} m²) 已超过货柜底部面积，**货物需要堆叠多层**才能装入！</p>`;
+            outputHTML += `<p class="alert-danger">⚠️ 警告：总占地面积 (${totalCargoArea_m2.toFixed(2)} m²) 已超过货柜底部面积 (${containerArea_m2.toFixed(2)} m²)，**货物需要堆叠多层**才能装入！</p>`;
         } else if (areaUtilizationRate > 90) {
-            outputHTML += `<p class="alert-success">👍 单层面积利用率极高，需严密摆放，可能只需堆叠一层。</p>`;
+            outputHTML += `<p class="alert-warning">👍 单层面积利用率极高 (${areaUtilizationRate.toFixed(2)}%)，需严密摆放，可能只需堆叠一层。</p>`;
         } else {
             outputHTML += `<p>单层面积足够，不需要或只需少量堆叠。</p>`;
         }
         
         outputHTML += `</div>`;
         resultsDiv.innerHTML = outputHTML;
+
+        // 6. 调用绘图函数
+        // 这里需要传递一个扁平化的货物列表，包含每个单件货物的信息
+        // 为了简化2D绘制，我们只关心L和W，并假设所有N件货物的摆放方式相同
+        const flatCargoList = [];
+        cargoDataForDraw.forEach(cargo => {
+            // 根据面积基准，决定在俯视图中绘制的长和宽
+            let drawL = cargo.L;
+            let drawW = cargo.W;
+            if (areaBasis === 'WH') { drawL = cargo.W; drawW = cargo.H; }
+            if (areaBasis === 'LH') { drawL = cargo.L; drawW = cargo.H; }
+            // MIN_AREA 的情况需要复杂逻辑，这里简化处理，直接用L*W作为示意
+            // 真实的MIN_AREA需要判断是哪个面最小，然后用对应的两个尺寸作为L和W
+            // 但对于简单的俯视图，我们只描绘基准面
+            if (areaBasis === 'MIN_AREA') {
+                 const currentAreas = [{d1: cargo.L, d2: cargo.W, area: cargo.L*cargo.W},
+                                       {d1: cargo.W, d2: cargo.H, area: cargo.W*cargo.H},
+                                       {d1: cargo.L, d2: cargo.H, area: cargo.L*cargo.H}];
+                 const minAreaDim = currentAreas.sort((a,b) => a.area - b.area)[0];
+                 drawL = minAreaDim.d1;
+                 drawW = minAreaDim.d2;
+            }
+
+
+            for(let i = 0; i < cargo.N; i++) {
+                flatCargoList.push({ L: drawL, W: drawW, H: cargo.H, originalId: cargo.id });
+            }
+        });
+
+        // 调用绘图函数
+        drawLoadingMap(container, flatCargoList);
     }
+
+    /**
+     * 绘制装柜俯视图
+     * @param {object} container - 选定的集装箱规格
+     * @param {Array<object>} cargoList - 扁平化后的单件货物列表，每个对象包含 {L, W, H, originalId}
+     */
+    function drawLoadingMap(container, cargoList) {
+        const canvas = document.getElementById('containerCanvas');
+        const ctx = canvas.getContext('2d');
+        const visArea = document.getElementById('visualization-area');
+        
+        // 确保显示绘图区域
+        visArea.style.display = 'block';
+
+        // 1. 设置画布比例 (以厘米为基准缩放)
+        // 保持容器比例，并确保不会超出页面宽度，留出边距
+        const padding = 40; // 画布边距
+        const maxCanvasWidth = 800; // 限制画布最大宽度
+        const maxCanvasHeight = 500; // 限制画布最大高度
+
+        // 计算适应画布的最大缩放比例
+        const scaleX = (maxCanvasWidth - padding) / container.L;
+        const scaleY = (maxCanvasHeight - padding) / container.W;
+        const scale = Math.min(scaleX, scaleY);
+        
+        canvas.width = container.L * scale + padding;
+        canvas.height = container.W * scale + padding;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 2. 画出集装箱轮廓
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 3;
+        // 绘制矩形，留出 padding
+        ctx.strokeRect(padding / 2, padding / 2, container.L * scale, container.W * scale);
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(padding / 2, padding / 2, container.L * scale, container.W * scale);
+
+        // 3. 简单的排布算法 (Shelf Packing 货架式排布)
+        let curX = padding / 2; // 当前放置的X坐标
+        let curY = padding / 2; // 当前放置的Y坐标
+        let maxRowHeight = 0; // 当前行中最高（宽）的货物尺寸
+
+        // 颜色池，用于循环分配
+        const colors = [
+            'hsla(20, 70%, 60%, 0.8)', 'hsla(180, 70%, 60%, 0.8)', 'hsla(60, 70%, 60%, 0.8)',
+            'hsla(240, 70%, 60%, 0.8)', 'hsla(300, 70%, 60%, 0.8)', 'hsla(120, 70%, 60%, 0.8)'
+        ];
+        let colorIndex = 0;
+
+        // 根据货物L*W面积从大到小排序，尝试优先放置大件，可能有助于可视化填充
+        cargoList.sort((a, b) => (b.L * b.W) - (a.L * a.W));
+
+        cargoList.forEach((cargo) => {
+            ctx.fillStyle = colors[colorIndex % colors.length];
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+
+            // 检查当前行是否能放下
+            if (curX + cargo.L * scale > (container.L * scale + padding / 2)) {
+                curX = padding / 2; // 换行，X重置
+                curY += maxRowHeight; // Y坐标增加，换到下一行
+                maxRowHeight = 0; // 重置本行最大高度
+            }
+            
+            // 如果Y方向也超出了集装箱的范围，说明二维平面已经放不下了，停止绘制
+            if (curY + cargo.W * scale > (container.W * scale + padding / 2)) {
+                // 可以加一个提示，示意图无法完全显示所有货物
+                // console.warn('2D 俯视图空间不足，部分货物未能显示。');
+                return; // 跳过此货物，不再绘制
+            }
+
+            // 绘制货物
+            ctx.fillRect(curX, curY, cargo.L * scale, cargo.W * scale);
+            ctx.strokeRect(curX, curY, cargo.L * scale, cargo.W * scale);
+            
+            // 可选：在方块上绘制文字，表示货物序号
+            // ctx.fillStyle = '#fff';
+            // ctx.font = `${10 * scale}px Arial`;
+            // ctx.textAlign = 'center';
+            // ctx.textBaseline = 'middle';
+            // ctx.fillText(`#${cargo.originalId}`, curX + cargo.L * scale / 2, curY + cargo.W * scale / 2);
+
+
+            curX += cargo.L * scale; // 更新X坐标
+            maxRowHeight = Math.max(maxRowHeight, cargo.W * scale); // 更新当前行最大高度
+
+            colorIndex++; // 切换颜色
+        });
+    }
+
+    // 初始化时更新一次货物序号
+    document.addEventListener('DOMContentLoaded', updateCargoNumbers);
 </script>
 
 </body>
